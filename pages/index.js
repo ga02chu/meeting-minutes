@@ -18,14 +18,31 @@ const PROGRESS_STEPS = [
 ]
 
 // ── Storage ───────────────────────────────────────────────
+// ── Supabase ─────────────────────────────────────────────
+const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const SUPA_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+
 const store = {
+  _sb: null,
+  sb() {
+    if (!this._sb && SUPA_URL && SUPA_KEY) {
+      this._sb = createClient(SUPA_URL, SUPA_KEY)
+    }
+    return this._sb
+  },
   get: () => { try { return JSON.parse(localStorage.getItem('mtg_v3') || '[]') } catch { return [] } },
-  save: (m) => {
+  save: async (m) => {
     const list = store.get(); const i = list.findIndex(x => x.id === m.id)
     if (i >= 0) list[i] = m; else list.unshift(m)
     localStorage.setItem('mtg_v3', JSON.stringify(list))
+    const sb = store.sb()
+    if (sb) { try { await sb.from('meetings').upsert({ id: m.id, data: m, updated_at: new Date().toISOString() }) } catch(e) { console.warn('Supabase save:', e) } }
   },
-  del: (id) => localStorage.setItem('mtg_v3', JSON.stringify(store.get().filter(m => m.id !== id))),
+  del: async (id) => {
+    localStorage.setItem('mtg_v3', JSON.stringify(store.get().filter(m => m.id !== id)))
+    const sb = store.sb()
+    if (sb) { try { await sb.from('meetings').delete().eq('id', id) } catch(e) { console.warn('Supabase del:', e) } }
+  },
   toggleAction: (mid, aid) => {
     const list = store.get(); const m = list.find(x => x.id === mid)
     if (m) {
@@ -33,6 +50,22 @@ const store = {
       if (a) { a.done = !a.done; a.completedAt = a.done ? new Date().toISOString() : null }
     }
     localStorage.setItem('mtg_v3', JSON.stringify(list))
+    const sb = store.sb()
+    if (sb && m) { try { sb.from('meetings').upsert({ id: mid, data: m, updated_at: new Date().toISOString() }) } catch(e) {} }
+  },
+  syncFromCloud: async () => {
+    const sb = store.sb()
+    if (!sb) return null
+    try {
+      const { data, error } = await sb.from('meetings').select('data').order('updated_at', { ascending: false })
+      if (error || !data) return null
+      const cloud = data.map(r => r.data).filter(Boolean)
+      const local = store.get()
+      const merged = [...cloud]
+      local.forEach(m => { if (!merged.find(x => x.id === m.id)) merged.push(m) })
+      localStorage.setItem('mtg_v3', JSON.stringify(merged))
+      return merged
+    } catch(e) { console.warn('Supabase sync:', e); return null }
   }
 }
 
