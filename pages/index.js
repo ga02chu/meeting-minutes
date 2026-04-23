@@ -295,6 +295,8 @@ function UploadModal({ onClose, onResult }) {
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [selectedTags, setSelectedTags] = useState([])
+  const toggleTag = (t) => setSelectedTags(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t])
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -638,6 +640,7 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
   const [showFR, setShowFR] = useState(false)
   const [actionSort, setActionSort] = useState(null)
   const [showLinkModal, setShowLinkModal] = useState(false)
+  const [showLinks, setShowLinks] = useState(!!(initial.links?.length))
   const [linkUrl, setLinkUrl] = useState('')
   const [linkText, setLinkText] = useState('')
   const savedRange = useRef(null)
@@ -647,6 +650,7 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
 
   useEffect(() => {
     const h = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); doSave() }
       if ((e.metaKey || e.ctrlKey) && e.key === 'h') { e.preventDefault(); setShowFR(v => !v) }
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
@@ -861,6 +865,53 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
         {record.subtitle && <div className="subtitle-banner"><span className="subtitle-label">AI 摘要</span><span className="subtitle-text">{record.subtitle}</span></div>}
         <div className="tags-section">
           <MeetingTags tags={record.tags || []} onChange={tags => { setRecord(r => ({...r, tags})); setSaveStatus('unsaved') }} />
+        </div>
+        <div className="agenda-links-section">
+          <div className="agenda-links-header" onClick={() => setShowLinks(v => !v)}>
+            <span className="agenda-links-title">📎 相關連結</span>
+            <span className="agenda-links-toggle">{showLinks ? '▲' : '▼'}</span>
+          </div>
+          {showLinks && (
+            <div className="agenda-links-body">
+              {(record.links || []).map((lk, i) => (
+                <div key={i} className="agenda-link-row">
+                  <a href={lk.url} target="_blank" rel="noreferrer" className="agenda-link-item">
+                    🔗 {lk.title || lk.url}
+                  </a>
+                  <button className="agenda-link-remove" onClick={() => {
+                    const links = (record.links || []).filter((_, j) => j !== i)
+                    setRecord(r => ({...r, links})); setSaveStatus('unsaved')
+                  }}>✕</button>
+                </div>
+              ))}
+              <div className="agenda-link-add-row">
+                <input className="agenda-link-input" placeholder="標題（選填）"
+                  id="al-title" />
+                <input className="agenda-link-input" placeholder="網址 https://…"
+                  id="al-url"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      const url = document.getElementById('al-url').value.trim()
+                      const title = document.getElementById('al-title').value.trim()
+                      if (!url) return
+                      const links = [...(record.links || []), { title, url }]
+                      setRecord(r => ({...r, links})); setSaveStatus('unsaved')
+                      document.getElementById('al-url').value = ''
+                      document.getElementById('al-title').value = ''
+                    }
+                  }} />
+                <button className="agenda-link-add-btn" onClick={() => {
+                  const url = document.getElementById('al-url').value.trim()
+                  const title = document.getElementById('al-title').value.trim()
+                  if (!url) return
+                  const links = [...(record.links || []), { title, url }]
+                  setRecord(r => ({...r, links})); setSaveStatus('unsaved')
+                  document.getElementById('al-url').value = ''
+                  document.getElementById('al-title').value = ''
+                }}>＋ 新增</button>
+              </div>
+            </div>
+          )}
         </div>
         {saveStatus === 'unsaved' && <div className="autosave-hint">● 有未儲存的變更（30 秒後自動儲存）</div>}
         <div className="edit-hint">💡 點擊任何內容可直接編輯，修改日期會同步更新標題</div>
