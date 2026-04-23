@@ -78,12 +78,11 @@ export default async function handler(req, res) {
 
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const today = new Date()
+    const todayStr = today.toISOString().slice(0, 10)
+    const year = today.getFullYear()
+    const dynamicSystem = SYSTEM_PROMPT.replace('TODAY_PLACEHOLDER', '今天是 ' + todayStr + '，今年是 ' + year + ' 年，若逐字稿未明確提及年份，預設為 ' + year + ' 年')
     const message = await client.messages.create({
-      // Inject today's date dynamically
-      const today = new Date()
-      const todayStr = today.toISOString().slice(0, 10)
-      const year = today.getFullYear()
-      const dynamicSystem = SYSTEM_PROMPT.replace('TODAY_PLACEHOLDER', \`今天是 \${todayStr}，今年是 \${year} 年，若逐字稿未明確提及年份，預設為 \${year} 年\`)
       model: "claude-opus-4-5",
       max_tokens: 4096,
       system: dynamicSystem,
