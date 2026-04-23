@@ -1434,8 +1434,15 @@ function StatsPage() {
 export default function App() {
   const [view, setView] = useState('history')
   const unsavedRef = useRef(false)
+  const [synced, setSynced] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [detailRecord, setDetailRecord] = useState(null)
+
+  useEffect(() => {
+    store.syncFromCloud().then(merged => {
+      if (merged) setSynced(true)
+    })
+  }, [])
 
   const handleResult = (r) => {
     // Auto-save immediately so it appears in list
