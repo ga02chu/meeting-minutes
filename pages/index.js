@@ -637,12 +637,27 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
   const [exporting, setExporting] = useState(false)
   const [showFR, setShowFR] = useState(false)
   const [actionSort, setActionSort] = useState(null)
+  const [showLinkModal, setShowLinkModal] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
+  const [linkText, setLinkText] = useState('')
+  const savedRange = useRef(null)
   const [showUnknownModal, setShowUnknownModal] = useState(!!(initial.unknownPersons?.length))
   const lastSavedHtml = useRef(initial.html || "")
   const contentRef = useRef(null)
 
   useEffect(() => {
-    const h = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'h') { e.preventDefault(); setShowFR(v => !v) } }
+    const h = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'h') { e.preventDefault(); setShowFR(v => !v) }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        const sel = window.getSelection()
+        if (sel && sel.rangeCount > 0) {
+          savedRange.current = sel.getRangeAt(0).cloneRange()
+          setLinkText(sel.toString())
+        }
+        setShowLinkModal(true)
+      }
+    }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
   }, [])
@@ -672,12 +687,14 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
     if (onUnsavedChange) onUnsavedChange(saveStatus === 'unsaved')
   }, [saveStatus])
 
-  const doSave = () => {
+  const doSave = useCallback(() => {
     const html = contentRef.current?.innerHTML || record.html
     const m = { ...record, html, title: record.title || `${record.date} 頭目會議` }
-    store.save(m); setSaveStatus('saved'); setRecord(m)
+    store.save(m)
+    setSaveStatus('saved')
     lastSavedHtml.current = html
-  }
+    // Don't call setRecord here - would reset contentEditable cursor
+  }, [record])
 
   const handleUndo = () => {
     if (!confirm('確定要復原到上次儲存的版本？目前未儲存的變更將會消失。')) return
@@ -761,6 +778,14 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
             onChange={e => { setRecord(r => ({ ...r, title: e.target.value })); setSaveStatus('unsaved') }} />
           <input className="date-input" type="date" value={record.date || ''} onChange={e => handleDateChange(e.target.value)} />
         </div>
+        <button className="btn-find" onClick={() => {
+          const sel = window.getSelection()
+          if (sel && sel.rangeCount > 0) {
+            savedRange.current = sel.getRangeAt(0).cloneRange()
+            setLinkText(sel.toString())
+          }
+          setShowLinkModal(true)
+        }} title="插入連結 (Cmd+K)">🔗 連結</button>
         <button className="btn-find" onClick={() => setShowFR(v => !v)} title="尋找/取代 (Cmd+H)">尋找／取代</button>
         <button className="btn-undo" onClick={handleUndo} title="復原到上次儲存">復原</button>
         <button className="btn-save" style={{background:saveBg}} onClick={doSave}>{saveLabel}</button>
@@ -769,6 +794,46 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
       </div>
       <div className="page-content">
         {showFR && <FindReplace contentRef={contentRef} onClose={() => setShowFR(false)} />}
+        {showLinkModal && (
+          <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowLinkModal(false)}>
+            <div className="link-modal">
+              <div className="link-modal-title">🔗 插入連結</div>
+              <div className="link-field">
+                <label>顯示文字</label>
+                <input className="fr-input" value={linkText} onChange={e => setLinkText(e.target.value)} placeholder="連結文字…" autoFocus />
+              </div>
+              <div className="link-field">
+                <label>網址</label>
+                <input className="fr-input" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://…"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      if (!linkUrl) return
+                      contentRef.current?.focus()
+                      const sel = window.getSelection()
+                      if (savedRange.current) { sel.removeAllRanges(); sel.addRange(savedRange.current) }
+                      const a = `<a href="${linkUrl}" target="_blank" class="inline-link">${linkText || linkUrl}</a>`
+                      document.execCommand('insertHTML', false, a)
+                      setShowLinkModal(false); setLinkUrl(''); setLinkText('')
+                      setSaveStatus('unsaved')
+                    }
+                  }} />
+              </div>
+              <div className="link-modal-footer">
+                <button className="up-cancel-btn" onClick={() => { setShowLinkModal(false); setLinkUrl(''); setLinkText('') }}>取消</button>
+                <button className="up-apply-btn" onClick={() => {
+                  if (!linkUrl) return
+                  contentRef.current?.focus()
+                  const sel = window.getSelection()
+                  if (savedRange.current) { sel.removeAllRanges(); sel.addRange(savedRange.current) }
+                  const a = `<a href="${linkUrl}" target="_blank" class="inline-link">${linkText || linkUrl}</a>`
+                  document.execCommand('insertHTML', false, a)
+                  setShowLinkModal(false); setLinkUrl(''); setLinkText('')
+                  setSaveStatus('unsaved')
+                }}>插入</button>
+              </div>
+            </div>
+          </div>
+        )}
         {record.unknownPersons?.length > 0 && !showUnknownModal && (
           <div className="unknown-banner">
             <span className="unknown-icon">⚠</span>
