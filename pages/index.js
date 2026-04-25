@@ -27,6 +27,7 @@ const store = {
   sb() {
     if (!this._sb && SUPA_URL && SUPA_KEY) {
       this._sb = createClient(SUPA_URL, SUPA_KEY)
+      console.log('Supabase client created:', SUPA_URL.slice(0,30))
     }
     return this._sb
   },
@@ -725,10 +726,10 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
     if (onUnsavedChange) onUnsavedChange(saveStatus === 'unsaved')
   }, [saveStatus])
 
-  const doSave = useCallback(() => {
+  const doSave = useCallback(async () => {
     const html = contentRef.current?.innerHTML || record.html
     const m = { ...record, html, title: record.title || `${record.date} 頭目會議` }
-    store.save(m)
+    await store.save(m)
     setSaveStatus('saved')
     lastSavedHtml.current = html
     // Don't call setRecord here - would reset contentEditable cursor
@@ -1478,14 +1479,14 @@ export default function App() {
     })
   }, [])
 
-  const handleResult = (r) => {
+  const handleResult = async (r) => {
     // Auto-save immediately so it appears in list
     const title = (() => {
       const m = r.html?.match(/會議記錄｜([^<\n]+)/)
       return m ? m[1].trim() : r.date + ' 頭目會議'
     })()
     const saved = { ...r, title }
-    store.save(saved)
+    await store.save(saved)
     setShowUpload(false); setDetailRecord(saved); setView('detail')
   }
   const handleOpen = (m) => { setDetailRecord(m); setView('detail') }
