@@ -1472,6 +1472,24 @@ function StatsPage() {
 
 // ── App ───────────────────────────────────────────────────
 export default function App() {
+  const [unlocked, setUnlocked] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return sessionStorage.getItem('mtg_auth') === 'ok'
+  })
+  const [pwInput, setPwInput] = useState('')
+  const [pwError, setPwError] = useState(false)
+  const PASS = '料韓男總部'
+
+  const handleLogin = () => {
+    if (pwInput === PASS) {
+      sessionStorage.setItem('mtg_auth', 'ok')
+      setUnlocked(true)
+    } else {
+      setPwError(true)
+      setTimeout(() => setPwError(false), 1500)
+    }
+  }
+
   const [view, setView] = useState('history')
   const unsavedRef = useRef(false)
   const [synced, setSynced] = useState(false)
