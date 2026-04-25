@@ -127,10 +127,8 @@ function inRange(dateStr, filter, customMonth) {
 function parseDeadline(str) {
   if (!str || str === '—') return null
   const now = new Date()
-  // M/D or MM/DD
   const md = str.match(/^(\d{1,2})\/(\d{1,2})$/)
   if (md) return new Date(now.getFullYear(), parseInt(md[1]) - 1, parseInt(md[2]))
-  // YYYY/M/D or YYYY-M-D
   const full = str.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
   if (full) return new Date(parseInt(full[1]), parseInt(full[2]) - 1, parseInt(full[3]))
   return null
@@ -147,9 +145,9 @@ function deadlineStatus(task) {
   if (task.done) return 'done'
   const d = daysUntil(task)
   if (d === null) return 'none'
-  if (d < 0) return 'overdue'       // 已逾期
-  if (d <= 3) return 'urgent'       // 3天內 🔴
-  if (d <= 7) return 'warning'      // 7天內 🟡
+  if (d < 0) return 'overdue'
+  if (d <= 3) return 'urgent'
+  if (d <= 7) return 'warning'
   return 'ok'
 }
 
@@ -190,7 +188,6 @@ function Sidebar({ view, onNav, onUpload, onExport, onImport }) {
         <div className={`sidebar-item ${view === 'stores' ? 'active' : ''}`} onClick={() => onNav('stores')}>
           <IconStore /><span>分店總覽</span>
         </div>
-
       </nav>
       <div className="sidebar-footer">
         <button className="sidebar-upload-btn" onClick={onUpload}>＋ 上傳新記錄</button>
@@ -247,14 +244,12 @@ function getContext(html, name) {
 }
 
 function UnknownPersonsModal({ persons, html, onApply, onClose }) {
-  // Only show persons that actually appear in the HTML text
   const plainText = html.replace(/<[^>]+>/g, ' ')
   const visiblePersons = persons.filter(p => plainText.includes(p))
   const [remaining, setRemaining] = useState(visiblePersons)
   const [mappings, setMappings] = useState(() =>
     Object.fromEntries(visiblePersons.map(p => [p, '']))
   )
-  // If nothing to show, apply immediately
   if (visiblePersons.length === 0) { onApply(html); return null }
   const handleApply = () => {
     let newHtml = html
@@ -399,13 +394,11 @@ function getStructuredSnippets(html, keyword) {
   const safe = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const re = new RegExp(safe, 'gi')
   const results = []
-  // Parse sections: find h2 and their li/p children
   const sectionRe = /<(?:div[^>]*section[^>]*|div[^>]*)>\s*<h2[^>]*>(.*?)<\/h2>([\s\S]*?)<\/div>/gi
   let secMatch
   while ((secMatch = sectionRe.exec(html)) !== null) {
     const heading = secMatch[1].replace(/<[^>]+>/g, '').trim()
     const body = secMatch[2]
-    // Find matching li or p items
     const itemRe = /<(?:li|p)[^>]*>([\s\S]*?)<\/(?:li|p)>/gi
     let itemMatch
     const matchedItems = []
@@ -433,7 +426,7 @@ function highlightKeyword(text, keyword) {
 }
 
 // ── History Page ──────────────────────────────────────────
-function HistoryPage({ onOpen }) {
+function HistoryPage({ onOpen, role }) {
   const [meetings, setMeetings] = useState([])
   const [filter, setFilter] = useState('all')
   const [dateMode, setDateMode] = useState('upload')
@@ -573,10 +566,11 @@ function HistoryPage({ onOpen }) {
                   {pendingDeletes[m.id] && <div className="delete-pending-msg">即將刪除⋯ 5 秒內可復原</div>}
                   <div className="meeting-upload-date">上傳於 {m.createdAt?.slice(0,10) || '—'}</div>
                 </div>
-                {pendingDeletes[m.id]
-                  ? <button className="btn-undo-card" onClick={e => { e.stopPropagation(); handleUndoDelete(m.id) }}>復原</button>
-                  : <button className="btn-sm btn-sm-danger" onClick={e => { e.stopPropagation(); handleDelete(m.id) }}>刪除</button>
-                }
+                {role === 'admin' && (
+                  pendingDeletes[m.id]
+                    ? <button className="btn-undo-card" onClick={e => { e.stopPropagation(); handleUndoDelete(m.id) }}>復原</button>
+                    : <button className="btn-sm btn-sm-danger" onClick={e => { e.stopPropagation(); handleDelete(m.id) }}>刪除</button>
+                )}
               </div>
             ))}
           </div>
@@ -673,7 +667,7 @@ function FindReplace({ contentRef, onClose }) {
 }
 
 // ── Detail Page ───────────────────────────────────────────
-function DetailPage({ record: initial, onBack, onUnsavedChange }) {
+function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
   const [record, setRecord] = useState(initial)
   const [saveStatus, setSaveStatus] = useState(initial.title ? 'saved' : 'unsaved')
   const [exporting, setExporting] = useState(false)
@@ -687,6 +681,10 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
   const [showUnknownModal, setShowUnknownModal] = useState(!!(initial.unknownPersons?.length))
   const lastSavedHtml = useRef(initial.html || "")
   const contentRef = useRef(null)
+  const [showAdminModal, setShowAdminModal] = useState(false)
+  const isAdminAuthed = () => Date.now() < parseInt(sessionStorage.getItem('admin_auth_expiry') || '0')
+  const [contentUnlocked, setContentUnlocked] = useState(() => role === 'admin' || isAdminAuthed())
+  const [pendingDeletes, setPendingDeletes] = useState({})
 
   useEffect(() => {
     const h = (e) => {
@@ -737,7 +735,6 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
     await store.save(m)
     setSaveStatus('saved')
     lastSavedHtml.current = html
-    // Don't call setRecord here - would reset contentEditable cursor
   }, [record])
 
   const handleUndo = () => {
@@ -774,10 +771,7 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
     setSaveStatus('unsaved')
   }
 
-  const [pendingDeletes, setPendingDeletes] = useState({}) // {id: timeoutId}
-
   const removeAction = (id) => {
-    // Soft delete: mark pending, auto-confirm after 5s
     const timer = setTimeout(() => {
       setRecord(r => ({ ...r, actions: r.actions.filter(a => a.id !== id) }))
       setPendingDeletes(p => { const n = {...p}; delete n[id]; return n })
@@ -835,6 +829,15 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
         <button className="btn-save" style={{background:saveBg}} onClick={doSave}>{saveLabel}</button>
         <button className="btn-export" onClick={handleExportDocx} disabled={exporting}>{exporting ? '匯出中⋯' : '匯出 Word'}</button>
         <button className="btn-print" onClick={() => window.print()}>列印 / PDF</button>
+        {role === 'supervisor' && !contentUnlocked && (
+          <button onClick={() => setShowAdminModal(true)}
+            style={{padding:'6px 14px',borderRadius:8,background:'#f5f0eb',border:'1.5px solid #ccc',cursor:'pointer',fontSize:13,color:'#3d2b1f',whiteSpace:'nowrap'}}>
+            🔒 解鎖編輯內文
+          </button>
+        )}
+        {role === 'supervisor' && contentUnlocked && (
+          <span style={{fontSize:12,color:'var(--green)',padding:'4px 8px',whiteSpace:'nowrap'}}>✓ 編輯已解鎖</span>
+        )}
       </div>
       <div className="page-content">
         {showFR && <FindReplace contentRef={contentRef} onClose={() => setShowFR(false)} />}
@@ -925,10 +928,8 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
                 </div>
               ))}
               <div className="agenda-link-add-row">
-                <input className="agenda-link-input" placeholder="標題（選填）"
-                  id="al-title" />
-                <input className="agenda-link-input" placeholder="網址 https://…"
-                  id="al-url"
+                <input className="agenda-link-input" placeholder="標題（選填）" id="al-title" />
+                <input className="agenda-link-input" placeholder="網址 https://…" id="al-url"
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
                       const url = document.getElementById('al-url').value.trim()
@@ -954,77 +955,85 @@ function DetailPage({ record: initial, onBack, onUnsavedChange }) {
           )}
         </div>
         {saveStatus === 'unsaved' && <div className="autosave-hint">● 有未儲存的變更（30 秒後自動儲存）</div>}
-        <div className="edit-hint">💡 點擊任何內容可直接編輯，修改日期會同步更新標題</div>
+        {contentUnlocked && <div className="edit-hint">💡 點擊任何內容可直接編輯，修改日期會同步更新標題</div>}
         <div className="minutes-wrapper">
-          <div className="minutes-inner" ref={contentRef} contentEditable suppressContentEditableWarning
-            onInput={() => setSaveStatus('unsaved')} dangerouslySetInnerHTML={{ __html: record.html }} />
+          <div className="minutes-inner" ref={contentRef}
+            contentEditable={contentUnlocked}
+            suppressContentEditableWarning
+            onInput={() => { if (contentUnlocked) setSaveStatus('unsaved') }}
+            dangerouslySetInnerHTML={{ __html: record.html }} />
           <div className="action-section">
-              <div className="action-section-title">行動清單</div>
-              <table className="action-table-full">
-                <thead><tr>
-                  <th style={{width:36}}>完成</th>
-                  <th style={{width:72}}>負責人</th>
-                  <th>事項</th>
-                  <th style={{width:130}}>期限</th>
-                  <th style={{width:88}}>完成時間</th>
-                  <th style={{width:36,textAlign:"center",fontSize:11}}>刪除</th>
-                </tr></thead>
-                <tbody>
-                  {(actionSort
-                    ? [...(record.actions || [])].sort((a, b) => {
-                        if (actionSort === 'person') return (a.person||'').localeCompare(b.person||'')
-                        if (actionSort === 'deadline') {
-                          const da = parseDeadline(a.deadline); const db = parseDeadline(b.deadline)
-                          if (da && db) return da - db
-                          if (da) return -1; if (db) return 1; return 0
-                        }
-                        if (actionSort === 'urgency') {
-                          const order = {overdue:0,urgent:1,warning:2,ok:3,none:4,done:5}
-                          return (order[deadlineStatus(a)]||4) - (order[deadlineStatus(b)]||4)
-                        }
-                        return 0
-                      })
-                    : (record.actions || [])
-                  ).map(a => {
-                    const status = deadlineStatus(a)
-                    const isPendingDelete = !!pendingDeletes[a.id]
-                    const rowClass = isPendingDelete ? 'action-pending-delete' : a.done ? 'action-done' : status === 'overdue' ? 'action-overdue' : status === 'urgent' ? 'action-urgent' : status === 'warning' ? 'action-warning' : ''
-                    const d = daysUntil(a)
-                    return (
-                      <tr key={a.id} className={rowClass}>
-                        <td style={{textAlign:'center'}}><input type="checkbox" className="action-checkbox" checked={!!a.done} onChange={() => toggleAction(a.id)} /></td>
-                        <td contentEditable suppressContentEditableWarning className="editable-cell" onBlur={e => updateAction(a.id, 'person', e.target.innerText.trim())}>{a.person}</td>
-                        <td className="task-note-cell">
-                          <div contentEditable suppressContentEditableWarning className="task-text-edit" onBlur={e => updateAction(a.id, 'task', e.target.innerText.replace(/逾期.*天|緊急.*天|.*天後/g,'').trim())}>
-                            {a.task}
-                            {status === 'overdue' && <span className="dl-badge dl-overdue">逾期 {daysOverdue(a)} 天</span>}
-                            {status === 'urgent' && <span className="dl-badge dl-urgent">緊急 {d} 天</span>}
-                            {status === 'warning' && <span className="dl-badge dl-warning">{d} 天後</span>}
+            <div className="action-section-title">行動清單</div>
+            <table className="action-table-full">
+              <thead><tr>
+                <th style={{width:36}}>完成</th>
+                <th style={{width:72}}>負責人</th>
+                <th>事項</th>
+                <th style={{width:130}}>期限</th>
+                <th style={{width:88}}>完成時間</th>
+                <th style={{width:36,textAlign:"center",fontSize:11}}>刪除</th>
+              </tr></thead>
+              <tbody>
+                {(actionSort
+                  ? [...(record.actions || [])].sort((a, b) => {
+                      if (actionSort === 'person') return (a.person||'').localeCompare(b.person||'')
+                      if (actionSort === 'deadline') {
+                        const da = parseDeadline(a.deadline); const db = parseDeadline(b.deadline)
+                        if (da && db) return da - db
+                        if (da) return -1; if (db) return 1; return 0
+                      }
+                      if (actionSort === 'urgency') {
+                        const order = {overdue:0,urgent:1,warning:2,ok:3,none:4,done:5}
+                        return (order[deadlineStatus(a)]||4) - (order[deadlineStatus(b)]||4)
+                      }
+                      return 0
+                    })
+                  : (record.actions || [])
+                ).map(a => {
+                  const status = deadlineStatus(a)
+                  const isPendingDelete = !!pendingDeletes[a.id]
+                  const rowClass = isPendingDelete ? 'action-pending-delete' : a.done ? 'action-done' : status === 'overdue' ? 'action-overdue' : status === 'urgent' ? 'action-urgent' : status === 'warning' ? 'action-warning' : ''
+                  const d = daysUntil(a)
+                  return (
+                    <tr key={a.id} className={rowClass}>
+                      <td style={{textAlign:'center'}}><input type="checkbox" className="action-checkbox" checked={!!a.done} onChange={() => toggleAction(a.id)} /></td>
+                      <td contentEditable suppressContentEditableWarning className="editable-cell" onBlur={e => updateAction(a.id, 'person', e.target.innerText.trim())}>{a.person}</td>
+                      <td className="task-note-cell">
+                        <div contentEditable suppressContentEditableWarning className="task-text-edit" onBlur={e => updateAction(a.id, 'task', e.target.innerText.replace(/逾期.*天|緊急.*天|.*天後/g,'').trim())}>
+                          {a.task}
+                          {status === 'overdue' && <span className="dl-badge dl-overdue">逾期 {daysOverdue(a)} 天</span>}
+                          {status === 'urgent' && <span className="dl-badge dl-urgent">緊急 {d} 天</span>}
+                          {status === 'warning' && <span className="dl-badge dl-warning">{d} 天後</span>}
+                        </div>
+                        <div className="inline-note-wrap">
+                          <div contentEditable suppressContentEditableWarning className="inline-note" data-placeholder="＋ 備註…" onBlur={e => updateAction(a.id, 'note', e.target.innerText.trim())}>
+                            {a.note ? `(${a.note})` : ''}
                           </div>
-                          <div className="inline-note-wrap">
-                            <div contentEditable suppressContentEditableWarning className="inline-note" data-placeholder="＋ 備註…" onBlur={e => updateAction(a.id, 'note', e.target.innerText.trim())}>
-                              {a.note ? `(${a.note})` : ''}
-                            </div>
-
-                          </div>
-                        </td>
-                        <td><input type="date" className="deadline-input" value={a.deadline || ''} onChange={e => updateAction(a.id, 'deadline', e.target.value)} /></td>
-                        <td style={{fontSize:11,color:'var(--green)',textAlign:'center'}}>{a.completedAt ? a.completedAt.slice(0,10) : '—'}</td>
-                        <td style={{textAlign:'center',minWidth:60}}>
-                          {pendingDeletes[a.id]
-                            ? <button className="undo-delete-btn" onClick={() => undoDelete(a.id)}>復原</button>
-                            : <button className="delete-action-btn" onClick={() => removeAction(a.id)} title="刪除">✕</button>
-                          }
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <button className="add-action-btn" onClick={addAction}>＋ 新增事項</button>
-            </div>
+                        </div>
+                      </td>
+                      <td><input type="date" className="deadline-input" value={a.deadline || ''} onChange={e => updateAction(a.id, 'deadline', e.target.value)} /></td>
+                      <td style={{fontSize:11,color:'var(--green)',textAlign:'center'}}>{a.completedAt ? a.completedAt.slice(0,10) : '—'}</td>
+                      <td style={{textAlign:'center',minWidth:60}}>
+                        {pendingDeletes[a.id]
+                          ? <button className="undo-delete-btn" onClick={() => undoDelete(a.id)}>復原</button>
+                          : <button className="delete-action-btn" onClick={() => removeAction(a.id)} title="刪除">✕</button>
+                        }
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <button className="add-action-btn" onClick={addAction}>＋ 新增事項</button>
+          </div>
         </div>
       </div>
+      {showAdminModal && (
+        <AdminAuthModal
+          onSuccess={() => { setContentUnlocked(true); setShowAdminModal(false) }}
+          onClose={() => setShowAdminModal(false)}
+        />
+      )}
     </>
   )
 }
@@ -1058,7 +1067,6 @@ function TasksPage() {
     : statusFilter === 'normal' ? filtered.filter(a => !a.done && (deadlineStatus(a) === 'ok' || deadlineStatus(a) === 'none'))
     : statusFilter === 'done' ? filtered.filter(a => a.done)
     : filtered
-  // Overview stats: always full picture (not affected by statusFilter)
   const allPending = filtered.filter(a => !a.done)
   const allDone = filtered.filter(a => a.done)
   const overdue = allPending.filter(a => deadlineStatus(a) === "overdue")
@@ -1067,7 +1075,6 @@ function TasksPage() {
   const total = filtered.length
   const pct = total > 0 ? Math.round((allDone.length / total) * 100) : 0
 
-  // List stats: affected by statusFilter (for display only)
   const pending = statusFiltered.filter(a => !a.done).sort((a, b) => {
     const da = parseDeadline(a.deadline); const db = parseDeadline(b.deadline)
     if (da && db) return da - db
@@ -1076,8 +1083,6 @@ function TasksPage() {
   })
   const done = statusFiltered.filter(a => a.done)
 
-  // Per-person stats
-  // Build HQ stats in fixed order
   const hqStats = HQ_TEAM_ORDER.map(h => {
     const tasks = filtered.filter(a => HQ_TEAM_ORDER.some(hq => hq === h && (a.person?.includes(hq) || hq.includes(a.person))))
     const doneCnt = tasks.filter(a => a.done).length
@@ -1085,7 +1090,6 @@ function TasksPage() {
     const urgentCnt = tasks.filter(a => !a.done && deadlineStatus(a) === 'urgent').length
     return { name: h, total: tasks.length, done: doneCnt, overdue: overdueCnt, urgent: urgentCnt, pct: tasks.length > 0 ? Math.round(doneCnt / tasks.length * 100) : 0 }
   }).filter(s => s.total > 0)
-  // Other 其他夥伴
   const otherTasks = filtered.filter(a => a.person && !isHQ(a.person))
   const otherDone = otherTasks.filter(a => a.done).length
   const otherOverdue = otherTasks.filter(a => !a.done && deadlineStatus(a) === 'overdue').length
@@ -1106,8 +1110,6 @@ function TasksPage() {
       </div>
       <div className="page-content">
         <div className="tasks-layout"><div className="tasks-wrapper">
-
-          {/* ── Overview stats ── */}
           <div className="tasks-overview">
             <div className="overview-main">
               <div className="overview-pct">{pct}%</div>
@@ -1125,8 +1127,6 @@ function TasksPage() {
               <div className="stat-card green"><div className="stat-label">已完成</div><div className="stat-num">{allDone.length}</div></div>
             </div>
           </div>
-
-          {/* ── Per person progress ── */}
           {personStats.length > 0 && (
             <div className="person-progress-section">
               <div className="section-label">夥伴完成進度</div>
@@ -1153,8 +1153,6 @@ function TasksPage() {
               </div>
             </div>
           )}
-
-          {/* ── Deadline alerts ── */}
           {filtered.filter(a => !a.done && deadlineStatus(a) === 'overdue').length > 0 && (
             <div className="overdue-section">
               <div className="tasks-section-header overdue">⛔ 已逾期（{filtered.filter(a => !a.done && deadlineStatus(a) === 'overdue').length}）</div>
@@ -1173,14 +1171,10 @@ function TasksPage() {
               {filtered.filter(a => !a.done && deadlineStatus(a) === 'warning').map(a => <TaskRow key={a.id} task={a} onToggle={() => toggle(a.meetingId, a.id)} />)}
             </div>
           )}
-
-          {/* ── Pending ── */}
           <div className="tasks-section-header pending">一般待處理（{pending.filter(a => deadlineStatus(a) === "ok" || deadlineStatus(a) === "none").length}）</div>
           {pending.filter(a => deadlineStatus(a) === "ok" || deadlineStatus(a) === "none").length === 0
             ? <div style={{padding:'12px 0',color:'var(--ink-light)',fontSize:13}}>🎉 目前沒有待處理事項</div>
             : pending.filter(a => deadlineStatus(a) === "ok" || deadlineStatus(a) === "none").map(a => <TaskRow key={a.id} task={a} onToggle={() => toggle(a.meetingId, a.id)} />)}
-
-          {/* ── Done ── */}
           <button className="btn-show-done" onClick={() => setShowDone(v => !v)}>
             {showDone ? '▲ 隱藏已完成' : `▼ 顯示已完成（${done.length}）`}
           </button>
@@ -1192,7 +1186,7 @@ function TasksPage() {
         <div className="status-filter-panel">
           <div className="sfp-title">狀態篩選{statusFilter !== 'all' && <span className="sfp-active-dot" />}</div>
           {[
-            { key: 'all', label: '全部任務', count: total, color: 'var(--ink)' }, // overview
+            { key: 'all', label: '全部任務', count: total, color: 'var(--ink)' },
             { key: 'overdue', label: '⛔ 已逾期', count: overdue.length, color: 'var(--red)' },
             { key: 'urgent', label: '🔴 緊急（3天內）', count: urgent.length, color: '#f43f5e' },
             { key: 'warning', label: '🟡 即將到期（7天內）', count: warning.length, color: 'var(--gold)' },
@@ -1255,7 +1249,6 @@ const STORES = [
 ]
 
 function extractStoreSections(html, keywords) {
-  // Extract items grouped by their section heading
   const sections = []
   const sectionRe = /<div class="section[^"]*">\s*<h2[^>]*>([\s\S]*?)<\/h2>([\s\S]*?)<\/div>/gi
   let sec
@@ -1368,19 +1361,16 @@ function StatsPage() {
   const overdue = allActions.filter(a => !a.done && isOverdue(a))
   const pct = allActions.length > 0 ? Math.round(done.length / allActions.length * 100) : 0
 
-  // Per-person stats
   const people = [...new Set(allActions.map(a => a.person).filter(Boolean))]
   const personStats = people.map(p => {
     const tasks = allActions.filter(a => a.person === p)
     return { name: p, total: tasks.length, done: tasks.filter(a => a.done).length }
   }).sort((a, b) => b.total - a.total).slice(0, 8)
 
-  // Tag distribution
   const tagCounts = {}
   monthMeetings.forEach(m => (m.tags || []).forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1 }))
   const tags = Object.entries(tagCounts).sort((a,b) => b[1]-a[1])
 
-  // All months for selector
   const months = [...new Set(meetings.map(m => (m.date||m.createdAt||'').slice(0,7)).filter(Boolean))].sort().reverse()
 
   return (
@@ -1395,7 +1385,6 @@ function StatsPage() {
       </div>
       <div className="page-content">
         <div className="stats-page">
-          {/* Overview */}
           <div className="stats-overview-grid">
             <div className="stats-big-card">
               <div className="stats-big-num">{monthMeetings.length}</div>
@@ -1417,7 +1406,6 @@ function StatsPage() {
           </div>
 
           <div className="stats-two-col">
-            {/* Person workload */}
             <div className="stats-card">
               <div className="stats-card-title">夥伴任務量</div>
               {personStats.length === 0 ? <div className="empty-state" style={{padding:'20px 0',fontSize:13}}>本月無資料</div> :
@@ -1433,7 +1421,6 @@ function StatsPage() {
               }
             </div>
 
-            {/* Meetings list */}
             <div className="stats-card">
               <div className="stats-card-title">本月會議列表</div>
               {monthMeetings.length === 0 ? <div className="empty-state" style={{padding:'20px 0',fontSize:13}}>本月無會議記錄</div> :
@@ -1449,7 +1436,6 @@ function StatsPage() {
             </div>
           </div>
 
-          {/* Tags */}
           {tags.length > 0 && (
             <div className="stats-card" style={{marginTop:16}}>
               <div className="stats-card-title">本月標籤分布</div>
@@ -1470,20 +1456,58 @@ function StatsPage() {
   )
 }
 
+// ── Admin Auth Modal ──────────────────────────────────────
+function AdminAuthModal({ onSuccess, onClose }) {
+  const [pw, setPw] = useState('')
+  const [err, setErr] = useState(false)
+  const ADMIN_PASS = '料韓男總部'
+  const handleSubmit = () => {
+    if (pw === ADMIN_PASS) {
+      sessionStorage.setItem('admin_auth_expiry', String(Date.now() + 30 * 60 * 1000))
+      onSuccess()
+    } else {
+      setErr(true)
+      setTimeout(() => setErr(false), 1500)
+    }
+  }
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{background:'#fff',borderRadius:12,padding:'32px 28px',display:'flex',flexDirection:'column',gap:16,minWidth:300,boxShadow:'0 8px 32px rgba(0,0,0,.12)'}}>
+        <div style={{fontSize:16,fontWeight:700,color:'#3d2b1f'}}>🔒 解鎖編輯內文</div>
+        <div style={{fontSize:13,color:'#888'}}>需要管理員密碼，驗證後 30 分鐘內有效。</div>
+        <input type="password" placeholder="請輸入管理員密碼" value={pw}
+          onChange={e => setPw(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+          style={{padding:'10px 14px',borderRadius:8,border:err?'2px solid #e53e3e':'1.5px solid #ccc',fontSize:14,outline:'none'}}
+          autoFocus />
+        {err && <div style={{color:'#e53e3e',fontSize:12}}>密碼錯誤，請再試一次</div>}
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+          <button onClick={onClose} style={{padding:'8px 16px',borderRadius:8,border:'1.5px solid #ccc',background:'none',cursor:'pointer',fontSize:13}}>取消</button>
+          <button onClick={handleSubmit} style={{padding:'8px 16px',borderRadius:8,background:'#3d2b1f',color:'#fff',border:'none',cursor:'pointer',fontSize:13}}>確認</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── App ───────────────────────────────────────────────────
 export default function App() {
-  const [unlocked, setUnlocked] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return sessionStorage.getItem('mtg_auth') === 'ok'
+  const [role, setRole] = useState(() => {
+    if (typeof window === 'undefined') return null
+    return sessionStorage.getItem('mtg_role') || null
   })
   const [pwInput, setPwInput] = useState('')
   const [pwError, setPwError] = useState(false)
-  const PASS = '料韓男總部'
+  const SUPERVISOR_PASS = 'yohannamhead'
+  const ADMIN_PASS = '料韓男總部'
 
   const handleLogin = () => {
-    if (pwInput === PASS) {
-      sessionStorage.setItem('mtg_auth', 'ok')
-      setUnlocked(true)
+    if (pwInput === ADMIN_PASS) {
+      sessionStorage.setItem('mtg_role', 'admin')
+      setRole('admin')
+    } else if (pwInput === SUPERVISOR_PASS) {
+      sessionStorage.setItem('mtg_role', 'supervisor')
+      setRole('supervisor')
     } else {
       setPwError(true)
       setTimeout(() => setPwError(false), 1500)
@@ -1522,17 +1546,18 @@ export default function App() {
     importBackup(f, (count) => { alert(`匯入成功！共 ${count} 筆記錄`); e.target.value = '' })
   }
 
-  if (!unlocked) {
+  if (!role) {
     return (
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#faf8f5',flexDirection:'column',gap:16}}>
-        <div style={{fontSize:22,fontWeight:700,color:'#3d2b1f',marginBottom:8}}>料韓男總部</div>
+        <div style={{fontSize:22,fontWeight:700,color:'#3d2b1f',marginBottom:4}}>料韓男總部</div>
+        <div style={{fontSize:13,color:'#aaa',marginBottom:8}}>會議記錄系統</div>
         <input
           type="password"
           placeholder="請輸入密碼"
           value={pwInput}
           onChange={e => setPwInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleLogin()}
-          style={{padding:'10px 16px',fontSize:16,borderRadius:8,border: pwError ? '2px solid #e53e3e' : '1.5px solid #ccc',outline:'none',width:220,textAlign:'center'}}
+          style={{padding:'10px 16px',fontSize:16,borderRadius:8,border:pwError?'2px solid #e53e3e':'1.5px solid #ccc',outline:'none',width:220,textAlign:'center'}}
           autoFocus
         />
         {pwError && <div style={{color:'#e53e3e',fontSize:13}}>密碼錯誤，請再試一次</div>}
@@ -1570,11 +1595,11 @@ export default function App() {
         />
         <input ref={importRef} type="file" accept=".json" style={{display:'none'}} onChange={handleImportFile} />
         <div className="main-area">
-          {view === 'history' && !isDetail && <HistoryPage onOpen={handleOpen} />}
+          {view === 'history' && !isDetail && <HistoryPage onOpen={handleOpen} role={role} />}
           {view === 'tasks' && <TasksPage />}
           {view === 'stats' && <StatsPage />}
           {view === 'stores' && <StoreOverviewPage />}
-          {isDetail && detailRecord && <DetailPage record={detailRecord} onBack={handleBack} onUnsavedChange={v => { unsavedRef.current = v }} />}
+          {isDetail && detailRecord && <DetailPage record={detailRecord} onBack={handleBack} onUnsavedChange={v => { unsavedRef.current = v }} role={role} />}
         </div>
       </div>
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} onResult={handleResult} />}
