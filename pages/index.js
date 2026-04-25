@@ -37,7 +37,12 @@ const store = {
     if (i >= 0) list[i] = m; else list.unshift(m)
     localStorage.setItem('mtg_v3', JSON.stringify(list))
     const sb = store.sb()
-    if (sb) { try { await sb.from('meetings').upsert({ id: m.id, data: m, updated_at: new Date().toISOString() }) } catch(e) { console.warn('Supabase save:', e) } }
+    if (sb) {
+      try {
+        const res = await sb.from('meetings').upsert({ id: m.id, data: m, updated_at: new Date().toISOString() })
+        console.log('Supabase upsert result:', res)
+      } catch(e) { console.error('Supabase save error:', e) }
+    } else { console.warn('Supabase not initialized, SUPA_URL:', SUPA_URL) }
   },
   del: async (id) => {
     localStorage.setItem('mtg_v3', JSON.stringify(store.get().filter(m => m.id !== id)))
