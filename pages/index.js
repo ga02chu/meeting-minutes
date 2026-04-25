@@ -1503,7 +1503,6 @@ export default function App() {
   }, [])
 
   const handleResult = async (r) => {
-    // Auto-save immediately so it appears in list
     const title = (() => {
       const m = r.html?.match(/會議記錄｜([^<\n]+)/)
       return m ? m[1].trim() : r.date + ' 頭目會議'
@@ -1521,6 +1520,25 @@ export default function App() {
   const handleImportFile = (e) => {
     const f = e.target.files[0]; if (!f) return
     importBackup(f, (count) => { alert(`匯入成功！共 ${count} 筆記錄`); e.target.value = '' })
+  }
+
+  if (!unlocked) {
+    return (
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#faf8f5',flexDirection:'column',gap:16}}>
+        <div style={{fontSize:22,fontWeight:700,color:'#3d2b1f',marginBottom:8}}>料韓男總部</div>
+        <input
+          type="password"
+          placeholder="請輸入密碼"
+          value={pwInput}
+          onChange={e => setPwInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleLogin()}
+          style={{padding:'10px 16px',fontSize:16,borderRadius:8,border: pwError ? '2px solid #e53e3e' : '1.5px solid #ccc',outline:'none',width:220,textAlign:'center'}}
+          autoFocus
+        />
+        {pwError && <div style={{color:'#e53e3e',fontSize:13}}>密碼錯誤，請再試一次</div>}
+        <button onClick={handleLogin} style={{padding:'10px 28px',background:'#3d2b1f',color:'#fff',border:'none',borderRadius:8,fontSize:15,cursor:'pointer'}}>進入</button>
+      </div>
+    )
   }
 
   return (
