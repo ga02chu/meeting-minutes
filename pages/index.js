@@ -36,6 +36,18 @@ const store = {
     const list = store.get(); const i = list.findIndex(x => x.id === m.id)
     if (i >= 0) list[i] = m; else list.unshift(m)
     localStorage.setItem('mtg_v3', JSON.stringify(list))
+
+    // ga 秘書自動同步（fire-and-forget，依 m.id 做 upsert，不重複）
+    if (m.date && m.id) {
+      fetch('/api/save-to-ga-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meeting: m }),
+      }).then(r => {
+        if (!r.ok) r.text().then(t => console.warn('ga assistant sync failed:', r.status, t))
+      }).catch(e => console.warn('ga assistant sync error:', e))
+    }
+
     const sb = store.sb()
     if (sb) {
       try {

@@ -18,6 +18,7 @@ export default async function handler(req, res) {
     html: m.html ?? null,
     raw_transcript: m.rawTranscript ?? null,
     source: "meeting-minutes",
+    external_id: m.id ? String(m.id) : undefined,
   };
 
   try {
