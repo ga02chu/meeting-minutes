@@ -129,7 +129,7 @@ export default async function handler(req, res) {
 
     const dataRows = actions.map((a, i) => new TableRow({
       children: [
-        [a.done ? "✓" : "", 800, a.done ? GREEN : "888"],
+        [a.done ? "✓" : "", 800, a.done ? GREEN : "888888"],
         [a.person, 1400, ACCENT],
         [a.task + (a.done && a.completedAt ? `\n（${a.completedAt.slice(0,10)} 完成）` : ''), 5000, "1a1410"],
         [a.deadline || "—", 1600, "5a4f44"],
