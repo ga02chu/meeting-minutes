@@ -42,6 +42,7 @@ const cellBorder = (color = BORDER_COLOR) => ({
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
+  try {
   const { title, subtitle, date, html, actions } = req.body;
   const { title: parsedTitle, meta, sections } = parseHtmlSections(html || '');
 
@@ -173,4 +174,8 @@ export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
   res.send(buffer);
+  } catch (e) {
+    console.error('export-docx error:', e);
+    res.status(500).json({ error: e?.message || String(e), stack: e?.stack?.slice(0, 800) });
+  }
 }

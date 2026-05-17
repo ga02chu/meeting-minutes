@@ -873,7 +873,11 @@ function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
     try {
       const html = contentRef.current?.innerHTML || record.html
       const res = await fetch('/api/export-docx', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...record, html }) })
-      if (!res.ok) throw new Error('匯出失敗')
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`
+        try { const j = await res.json(); if (j.error) msg = j.error } catch {}
+        throw new Error(`匯出失敗：${msg}`)
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a'); a.href = url
