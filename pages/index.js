@@ -435,6 +435,30 @@ function HistoryPage({ onOpen, role }) {
   const [dragId, setDragId] = useState(null)
   const [sortOrder, setSortOrder] = useState(null)
   const [tagFilter, setTagFilter] = useState(null)
+  const [bulkSync, setBulkSync] = useState(null) // null | { current, total, success, error }
+
+  const handleBulkSync = async () => {
+    if (bulkSync) return
+    const total = meetings.length
+    if (total === 0) { alert('沒有歷史會議可同步'); return }
+    if (!confirm(`將把 ${total} 筆會議全部同步到 ga 秘書，繼續嗎？\n（重複按會產生重複資料，建議只按一次）`)) return
+    setBulkSync({ current: 0, total, success: 0, error: 0 })
+    let success = 0, error = 0
+    for (let i = 0; i < total; i++) {
+      const m = meetings[i]
+      try {
+        const res = await fetch('/api/save-to-ga-assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meeting: m }),
+        })
+        if (res.ok) success++; else { error++; console.warn('sync failed:', m.id, await res.text().catch(() => '')) }
+      } catch (e) { error++; console.warn('sync error:', m.id, e) }
+      setBulkSync({ current: i + 1, total, success, error })
+    }
+    alert(`同步完成！\n✓ 成功 ${success} 筆\n✗ 失敗 ${error} 筆`)
+    setBulkSync(null)
+  }
 
   useEffect(() => { setMeetings(store.get()) }, [])
 
@@ -517,6 +541,26 @@ function HistoryPage({ onOpen, role }) {
           <span style={{fontSize:13,opacity:.5}}>🔍</span>
           <input placeholder="搜尋⋯⋯" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <button
+          onClick={handleBulkSync}
+          disabled={!!bulkSync}
+          title="把目前 localStorage 內的所有歷史會議一次同步到 ga 秘書（LINE 助理之後就能查到）"
+          style={{
+            marginLeft: 8,
+            padding: '6px 12px',
+            borderRadius: 8,
+            border: '1.5px solid #d4a574',
+            background: bulkSync ? '#f5f0eb' : '#fff8f0',
+            color: '#7a4a1a',
+            cursor: bulkSync ? 'wait' : 'pointer',
+            fontSize: 12,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {bulkSync
+            ? `同步中 ${bulkSync.current}/${bulkSync.total}（✓${bulkSync.success}）`
+            : '⚡ 批次同步到 ga 秘書'}
+        </button>
       </div>
       <div className="page-content">
         {filtered.length === 0 ? (
