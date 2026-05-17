@@ -671,6 +671,7 @@ function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
   const [record, setRecord] = useState(initial)
   const [saveStatus, setSaveStatus] = useState(initial.title ? 'saved' : 'unsaved')
   const [exporting, setExporting] = useState(false)
+  const [gaStatus, setGaStatus] = useState('idle') // idle | saving | saved | error
   const [showFR, setShowFR] = useState(false)
   const [actionSort, setActionSort] = useState(null)
   const [showLinkModal, setShowLinkModal] = useState(false)
@@ -789,6 +790,28 @@ function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
     setRecord(r => ({ ...r, actions: r.actions.map(a => a.id === id ? { ...a, _showNote: !a._showNote } : a) }))
   }
 
+  const handleSaveToGaAssistant = async () => {
+    if (gaStatus === 'saving') return
+    setGaStatus('saving')
+    try {
+      const html = contentRef.current?.innerHTML || record.html
+      const meeting = { ...record, html }
+      const res = await fetch('/api/save-to-ga-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meeting }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      setGaStatus('saved')
+      setTimeout(() => setGaStatus('idle'), 3000)
+    } catch (e) {
+      setGaStatus('error')
+      alert(`存到 ga 秘書失敗：${e.message}`)
+      setTimeout(() => setGaStatus('idle'), 3000)
+    }
+  }
+
   const handleExportDocx = async () => {
     setExporting(true)
     try {
@@ -828,6 +851,18 @@ function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
         <button className="btn-undo" onClick={handleUndo} title="復原到上次儲存">復原</button>
         <button className="btn-save" style={{background:saveBg}} onClick={doSave}>{saveLabel}</button>
         <button className="btn-export" onClick={handleExportDocx} disabled={exporting}>{exporting ? '匯出中⋯' : '匯出 Word'}</button>
+        <button
+          className="btn-export"
+          onClick={handleSaveToGaAssistant}
+          disabled={gaStatus === 'saving'}
+          style={{
+            background: gaStatus === 'saved' ? 'var(--green)' : gaStatus === 'error' ? 'var(--accent)' : undefined,
+            color: gaStatus === 'saved' || gaStatus === 'error' ? '#fff' : undefined,
+          }}
+          title="同步整理結果到 ga 秘書，之後在 LINE 可查歷史"
+        >
+          {gaStatus === 'saving' ? '同步中⋯' : gaStatus === 'saved' ? '✓ 已存到 ga 秘書' : gaStatus === 'error' ? '✗ 同步失敗' : '☁️ 存到 ga 秘書'}
+        </button>
         <button className="btn-print" onClick={() => window.print()}>列印 / PDF</button>
         {role === 'supervisor' && !contentUnlocked && (
           <button onClick={() => setShowAdminModal(true)}
