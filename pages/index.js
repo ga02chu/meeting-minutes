@@ -77,18 +77,24 @@ const store = {
     }
   },
   syncFromCloud: async () => {
-    const sb = store.sb()
-    if (!sb) return null
+    // 改從 ga 秘書 /api/meetings/list 拉（融合 plaud 上傳的會議 + 既有會議）
     try {
-      const { data, error } = await sb.from('meetings').select('data').order('updated_at', { ascending: false })
-      if (error || !data) return null
-      const cloud = data.map(r => r.data).filter(Boolean)
+      const r = await fetch('/api/list-from-ga-assistant')
+      if (!r.ok) {
+        console.warn('ga assistant list failed:', r.status)
+        return null
+      }
+      const data = await r.json()
+      if (!data?.meetings) return null
+      const cloud = data.meetings
       const local = store.get()
+      // 雲端優先，本地若有獨立資料（沒被同步過的）補在後面
       const merged = [...cloud]
       local.forEach(m => { if (!merged.find(x => x.id === m.id)) merged.push(m) })
       localStorage.setItem('mtg_v3', JSON.stringify(merged))
+      console.log(`syncFromCloud: ${cloud.length} from ga assistant + ${merged.length - cloud.length} local-only`)
       return merged
-    } catch(e) { console.warn('Supabase sync:', e); return null }
+    } catch(e) { console.warn('ga assistant sync failed:', e); return null }
   }
 }
 
