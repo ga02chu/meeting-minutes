@@ -110,6 +110,31 @@ export default async function handler(req, res) {
     overdue.sort((a, b) => a._days - b._days)
     urgent.sort((a, b) => a._days - b._days)
 
+    if (req.query.debug === '1') {
+      const all = []
+      for (const row of rows || []) {
+        const m = row.data
+        for (const a of m?.actions || []) {
+          all.push({
+            meetingDate: m.date,
+            person: a.person,
+            task: (a.task || '').slice(0, 60),
+            deadline: a.deadline,
+            done: !!a.done,
+            completedAt: a.completedAt || null,
+          })
+        }
+      }
+      return res.json({
+        ok: true,
+        totalMeetings: (rows || []).length,
+        totalActions: all.length,
+        doneCount: all.filter(x => x.done).length,
+        undoneCount: all.filter(x => !x.done).length,
+        all,
+      })
+    }
+
     if (overdue.length === 0 && urgent.length === 0) {
       return res.json({ ok: true, sent: false, reason: 'no pending items' })
     }
