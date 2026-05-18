@@ -61,7 +61,7 @@ const store = {
     const sb = store.sb()
     if (sb) { try { await sb.from('meetings').delete().eq('id', id) } catch(e) { console.warn('Supabase del:', e) } }
   },
-  toggleAction: (mid, aid) => {
+  toggleAction: async (mid, aid) => {
     const list = store.get(); const m = list.find(x => x.id === mid)
     if (m) {
       const a = m.actions?.find(x => x.id === aid)
@@ -69,7 +69,12 @@ const store = {
     }
     localStorage.setItem('mtg_v3', JSON.stringify(list))
     const sb = store.sb()
-    if (sb && m) { try { sb.from('meetings').upsert({ id: mid, data: m, updated_at: new Date().toISOString() }) } catch(e) {} }
+    if (sb && m) {
+      const { error } = await sb.from('meetings').upsert({ id: mid, data: m, updated_at: new Date().toISOString() })
+      if (error) throw new Error(`Supabase: ${error.message}`)
+    } else if (!sb) {
+      throw new Error('Supabase 未初始化（環境變數缺失？）')
+    }
   },
   syncFromCloud: async () => {
     const sb = store.sb()
@@ -1145,10 +1150,23 @@ function TasksPage() {
   const [timeFilter, setTimeFilter] = useState('all')
   const [customMonth, setCustomMonth] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [syncStatus, setSyncStatus] = useState('idle')
 
   useEffect(() => { setMeetings(store.get()) }, [])
 
-  const toggle = (mid, aid) => { store.toggleAction(mid, aid); setMeetings(store.get()) }
+  const toggle = async (mid, aid) => {
+    setSyncStatus('saving')
+    try {
+      await store.toggleAction(mid, aid)
+      setMeetings(store.get())
+      setSyncStatus('saved')
+      setTimeout(() => setSyncStatus(s => s === 'saved' ? 'idle' : s), 1500)
+    } catch (e) {
+      setSyncStatus('error')
+      alert(`同步失敗：${e.message}`)
+      setMeetings(store.get())
+    }
+  }
 
   const isHQ = (name) => HQ_TEAM_ORDER.some(h => name === h || name.includes(h) || h.includes(name))
   const allTasks = meetings
@@ -1200,6 +1218,15 @@ function TasksPage() {
     <>
       <div className="topbar">
         <span className="topbar-title">任務總表</span>
+        {syncStatus !== 'idle' && (
+          <span style={{
+            marginLeft: 12, fontSize: 13, padding: '4px 10px', borderRadius: 6,
+            background: syncStatus === 'saving' ? '#FAEEDA' : syncStatus === 'saved' ? '#E1F5EE' : '#FBEAF0',
+            color: syncStatus === 'saving' ? '#7a5a1a' : syncStatus === 'saved' ? '#0F6E56' : '#993556',
+          }}>
+            {syncStatus === 'saving' ? '同步中⋯' : syncStatus === 'saved' ? '✓ 已同步' : '⚠ 同步失敗'}
+          </span>
+        )}
         <div className="topbar-filters" style={{flexWrap:'wrap',gap:6}}>
           {[['all','全部'],['today','今天'],['week','本週'],['month','本月'],['prev','上個月'],['custom','自訂']].map(([k,v]) => (
             <button key={k} className={`tf-btn ${timeFilter===k?'active':''}`} onClick={() => setTimeFilter(k)}>{v}</button>
