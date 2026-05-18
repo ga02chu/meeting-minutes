@@ -813,8 +813,12 @@ function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
 
   const toggleAction = (id) => {
     const now = new Date().toISOString()
-    setRecord(r => ({ ...r, actions: r.actions.map(a => a.id === id ? { ...a, done: !a.done, completedAt: !a.done ? now : null } : a) }))
-    setSaveStatus('unsaved')
+    const newActions = record.actions.map(a => a.id === id ? { ...a, done: !a.done, completedAt: !a.done ? now : null } : a)
+    const html = contentRef.current?.innerHTML || record.html
+    const newRecord = { ...record, actions: newActions, html, title: record.title || `${record.date} 頭目會議` }
+    setRecord(newRecord)
+    setSaveStatus('saving')
+    store.save(newRecord).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('unsaved'))
   }
 
   const updateAction = (id, field, value) => {
