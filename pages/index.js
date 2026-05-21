@@ -300,8 +300,14 @@ function getContext(html, name) {
 }
 
 function UnknownPersonsModal({ persons, html, onApply, onClose }) {
+  // 從 html 直接抽出實際被標記的【？xxx？】，避免 persons 帶描述（如「耀倫（台中店主管…）」）導致匹配失敗
+  const markedNames = Array.from(new Set(
+    (html.match(/【？(.+?)？】/g) || []).map(s => s.replace(/^【？|？】$/g, ''))
+  ))
+  // 合併 persons 與 html 實際標記，去重
+  const allCandidates = Array.from(new Set([...markedNames, ...persons]))
   const plainText = html.replace(/<[^>]+>/g, ' ')
-  const visiblePersons = persons.filter(p => plainText.includes(p))
+  const visiblePersons = allCandidates.filter(p => plainText.includes(p) || markedNames.includes(p))
   const [remaining, setRemaining] = useState(visiblePersons)
   const [mappings, setMappings] = useState(() =>
     Object.fromEntries(visiblePersons.map(p => [p, '']))
@@ -310,11 +316,23 @@ function UnknownPersonsModal({ persons, html, onApply, onClose }) {
   const handleApply = () => {
     let newHtml = html
     Object.entries(mappings).forEach(([orig, mapped]) => {
-      if (mapped.trim()) {
-        const re = new RegExp(orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
-        newHtml = newHtml.replace(re, mapped.trim())
+      const escaped = orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const target = (mapped || '').trim()
+      if (target) {
+        // 連同【？？】標記一起換成正確名字
+        const reMarked = new RegExp(`【？${escaped}？】`, 'g')
+        newHtml = newHtml.replace(reMarked, target)
+        // 沒被標記、純名字也順手換（防止 html 其他地方出現裸名）
+        const reBare = new RegExp(escaped, 'g')
+        newHtml = newHtml.replace(reBare, target)
+      } else {
+        // 使用者沒填、選保留 → 去掉【？？】標記改回原名（看起來乾淨）
+        const reMarked = new RegExp(`【？${escaped}？】`, 'g')
+        newHtml = newHtml.replace(reMarked, orig)
       }
     })
+    // 殘留的【？？】標記（譬如使用者按了「保留原名」沒處理的）也一併去掉、留純名字
+    newHtml = newHtml.replace(/【？(.+?)？】/g, (_, name) => name)
     onApply(newHtml)
   }
   return (
