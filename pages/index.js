@@ -79,17 +79,30 @@ const store = {
   syncFromCloud: async () => {
     // 主來源：meeting-minutes 自己的 Supabase（含勾完成狀態，是即時的）
     // 輔助來源：ga 秘書 /api/meetings/list（補 plaud 上傳、Supabase 沒有的會議）
+    // 安全規則：Supabase 撈失敗就整個放棄、不動本地資料，避免被 ga 秘書初始快照覆寫
     try {
       let supa = []
+      let supaOk = false
       try {
         const r1 = await fetch('/api/list-from-supabase')
         if (r1.ok) {
           const d1 = await r1.json()
-          supa = d1?.meetings || []
+          if (d1?.ok && Array.isArray(d1.meetings)) {
+            supa = d1.meetings
+            supaOk = true
+          } else {
+            console.warn('supabase list bad payload:', d1)
+          }
         } else {
           console.warn('supabase list failed:', r1.status)
         }
       } catch (e) { console.warn('supabase list error:', e) }
+
+      // ✋ Supabase 撈不到就放棄這次同步，不要讓 ga 秘書初始快照覆蓋本地
+      if (!supaOk) {
+        console.warn('syncFromCloud: 主來源 Supabase 撈失敗，本次跳過同步以保護本地資料')
+        return null
+      }
 
       let ga = []
       try {
@@ -104,7 +117,6 @@ const store = {
       // ga 秘書補的：Supabase 沒有的才用
       const gaOnly = ga.filter(m => !supaIds.has(m.id))
       const cloud = [...supa, ...gaOnly]
-      if (cloud.length === 0) return null
 
       const local = store.get()
       // 本地獨有（兩邊都沒有）的會議也保留
