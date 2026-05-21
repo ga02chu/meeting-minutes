@@ -77,24 +77,45 @@ const store = {
     }
   },
   syncFromCloud: async () => {
-    // 改從 ga 秘書 /api/meetings/list 拉（融合 plaud 上傳的會議 + 既有會議）
+    // 主來源：meeting-minutes 自己的 Supabase（含勾完成狀態，是即時的）
+    // 輔助來源：ga 秘書 /api/meetings/list（補 plaud 上傳、Supabase 沒有的會議）
     try {
-      const r = await fetch('/api/list-from-ga-assistant')
-      if (!r.ok) {
-        console.warn('ga assistant list failed:', r.status)
-        return null
-      }
-      const data = await r.json()
-      if (!data?.meetings) return null
-      const cloud = data.meetings
+      let supa = []
+      try {
+        const r1 = await fetch('/api/list-from-supabase')
+        if (r1.ok) {
+          const d1 = await r1.json()
+          supa = d1?.meetings || []
+        } else {
+          console.warn('supabase list failed:', r1.status)
+        }
+      } catch (e) { console.warn('supabase list error:', e) }
+
+      let ga = []
+      try {
+        const r2 = await fetch('/api/list-from-ga-assistant')
+        if (r2.ok) {
+          const d2 = await r2.json()
+          ga = d2?.meetings || []
+        }
+      } catch (e) { console.warn('ga assistant list error:', e) }
+
+      const supaIds = new Set(supa.map(m => m.id))
+      // ga 秘書補的：Supabase 沒有的才用
+      const gaOnly = ga.filter(m => !supaIds.has(m.id))
+      const cloud = [...supa, ...gaOnly]
+      if (cloud.length === 0) return null
+
       const local = store.get()
-      // 雲端優先，本地若有獨立資料（沒被同步過的）補在後面
-      const merged = [...cloud]
-      local.forEach(m => { if (!merged.find(x => x.id === m.id)) merged.push(m) })
+      // 本地獨有（兩邊都沒有）的會議也保留
+      const cloudIds = new Set(cloud.map(m => m.id))
+      const localOnly = local.filter(m => !cloudIds.has(m.id))
+      const merged = [...cloud, ...localOnly]
+
       localStorage.setItem('mtg_v3', JSON.stringify(merged))
-      console.log(`syncFromCloud: ${cloud.length} from ga assistant + ${merged.length - cloud.length} local-only`)
+      console.log(`syncFromCloud: ${supa.length} supabase + ${gaOnly.length} ga + ${localOnly.length} local-only`)
       return merged
-    } catch(e) { console.warn('ga assistant sync failed:', e); return null }
+    } catch(e) { console.warn('sync failed:', e); return null }
   }
 }
 
