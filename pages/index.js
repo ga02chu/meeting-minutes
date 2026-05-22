@@ -785,8 +785,26 @@ function FindReplace({ contentRef, onClose }) {
 }
 
 // ── Detail Page ───────────────────────────────────────────
+// 補齊 actions 的唯一 id，避免舊資料 / plaud 來源 id 缺漏或重複時，
+// 編輯一筆會讓 updateAction map 把所有同 id row 改成同內容
+function normalizeActionIds(rec) {
+  if (!rec || !Array.isArray(rec.actions) || rec.actions.length === 0) return rec
+  const seen = new Set()
+  let changed = false
+  const actions = rec.actions.map((a, i) => {
+    let aid = a?.id
+    if (!aid || seen.has(aid)) {
+      aid = `${rec.id || 'mtg'}_a${i}_${Math.random().toString(36).slice(2, 8)}`
+      changed = true
+    }
+    seen.add(aid)
+    return { ...a, id: aid }
+  })
+  return changed ? { ...rec, actions } : rec
+}
+
 function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
-  const [record, setRecord] = useState(initial)
+  const [record, setRecord] = useState(() => normalizeActionIds(initial))
   const [saveStatus, setSaveStatus] = useState(initial.title ? 'saved' : 'unsaved')
   const [exporting, setExporting] = useState(false)
   const [gaStatus, setGaStatus] = useState('idle') // idle | saving | saved | error
@@ -838,6 +856,14 @@ function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
     }
   }, [])
 
+  // 救援存檔暫時停用（2026-05-22 出事：使用者反映代辦事項被覆蓋，
+  // 在釐清資料是否還可救回前不要主動寫雲端）
+  // useEffect(() => {
+  //   if (record !== initial) {
+  //     store.save(record).catch(e => console.warn('rescue save (normalize ids) failed:', e))
+  //   }
+  // }, [])
+
   useEffect(() => {
     if (saveStatus !== 'unsaved') return
     const t = setTimeout(() => { doSave(); }, 30000)
@@ -873,7 +899,17 @@ function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
     setSaveStatus('unsaved')
   }
 
+  // 兜底防護：actions 若有多筆共用同 id（資料異常），任何單筆更新都會被 .map 套到全部同 id 的 row。
+  // 偵測到就 abort 並彈警告，不要默默把資料寫壞（曾發生過 0521 會議全部 task 被覆蓋成同一個）
+  const guardActions = (actions, id) => {
+    if (!id) { alert('action id 缺失，無法更新（請重新整理頁面）'); return false }
+    const n = actions.filter(a => a.id === id).length
+    if (n > 1) { alert(`偵測到 ${n} 筆 action 共用同 id（資料異常），已阻擋寫入避免覆蓋。請重新整理頁面後再試`); return false }
+    return true
+  }
+
   const toggleAction = (id) => {
+    if (!guardActions(record.actions, id)) return
     const now = new Date().toISOString()
     const newActions = record.actions.map(a => a.id === id ? { ...a, done: !a.done, completedAt: !a.done ? now : null } : a)
     const html = contentRef.current?.innerHTML || record.html
@@ -884,6 +920,7 @@ function DetailPage({ record: initial, onBack, onUnsavedChange, role }) {
   }
 
   const updateAction = (id, field, value) => {
+    if (!guardActions(record.actions, id)) return
     setRecord(r => ({ ...r, actions: r.actions.map(a => a.id === id ? { ...a, [field]: value } : a) }))
     setSaveStatus('unsaved')
   }
