@@ -8,9 +8,10 @@ import { createClient } from '@supabase/supabase-js'
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
 
-  const secret = process.env.CRON_SECRET
+  // 一次性 token：用完即刪整個檔案（CRON_SECRET 因為 vercel env pull 拉不到值，所以不用）
+  const ONE_SHOT = 'ba430bcdea24540174d6f5ff0ecd282b'
   const key = req.body?.key || req.query?.key
-  if (!secret || key !== secret) return res.status(401).json({ error: 'bad key' })
+  if (key !== ONE_SHOT) return res.status(401).json({ error: 'bad key' })
 
   const { meetingId, actions } = req.body || {}
   if (!meetingId || !Array.isArray(actions) || actions.length === 0) {
