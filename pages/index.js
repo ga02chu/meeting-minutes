@@ -1680,7 +1680,7 @@ function StatsPage() {
 function AdminAuthModal({ onSuccess, onClose }) {
   const [pw, setPw] = useState('')
   const [err, setErr] = useState(false)
-  const ADMIN_PASS = '料韓男總部'
+  const ADMIN_PASS = 'yohannamhead'
   const handleSubmit = () => {
     if (pw === ADMIN_PASS) {
       sessionStorage.setItem('admin_auth_expiry', String(Date.now() + 30 * 60 * 1000))
