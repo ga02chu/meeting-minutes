@@ -107,9 +107,14 @@ async function pushToLine(token, groupId, text) {
 
 export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET
+  const previewToken = process.env.GA_ASSISTANT_SAVE_TOKEN
   const auth = req.headers.authorization || ''
   const queryKey = req.query.key || ''
-  if (secret && auth !== `Bearer ${secret}` && queryKey !== secret) {
+  const previewQuery = req.query.preview_token || ''
+
+  const authedBySecret = secret && (auth === `Bearer ${secret}` || queryKey === secret)
+  const authedByPreview = previewToken && previewQuery === previewToken
+  if (!authedBySecret && !authedByPreview) {
     return res.status(401).json({ error: 'unauthorized' })
   }
 
