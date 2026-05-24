@@ -21,34 +21,70 @@ function daysUntil(deadlineStr, todayTpe) {
   return Math.ceil((d - todayTpe) / 86400000)
 }
 
-function formatMessage(overdue, urgent, todayStr) {
-  const lines = [`🔔 頭目會議行動提醒（${todayStr}）`, '']
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
+
+function fmtTodayLabel(todayTpe) {
+  const m = todayTpe.getUTCMonth() + 1
+  const d = todayTpe.getUTCDate()
+  const w = WEEKDAYS[todayTpe.getUTCDay()]
+  return `${m}/${d} (${w})`
+}
+
+function fmtDateShort(deadlineStr) {
+  if (!deadlineStr || deadlineStr === '—') return ''
+  const md = deadlineStr.match(/^(\d{1,2})\/(\d{1,2})$/)
+  if (md) return `${parseInt(md[1])}/${parseInt(md[2])}`
+  const full = deadlineStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+  if (full) return `${parseInt(full[2])}/${parseInt(full[3])}`
+  return deadlineStr
+}
+
+function groupByPerson(items) {
+  const map = new Map()
+  for (const a of items) {
+    const p = a.person || '未指派'
+    if (!map.has(p)) map.set(p, [])
+    map.get(p).push(a)
+  }
+  return Array.from(map.entries()).sort(
+    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+  )
+}
+
+function formatMessage(overdue, urgent, todayTpe) {
+  const lines = [`🔔 頭目會議行動提醒  ${fmtTodayLabel(todayTpe)}`, '']
 
   if (overdue.length > 0) {
     lines.push(`⚠️ 已逾期 ${overdue.length} 項`)
-    for (const a of overdue) {
-      const days = Math.abs(a._days)
-      const person = a.person || '未指派'
-      const dl = a.deadline || '—'
-      lines.push(`• [${person}] ${a.task}（逾期 ${days} 天・${dl}）`)
+    lines.push('────────────')
+    for (const [person, items] of groupByPerson(overdue)) {
+      lines.push(`👤 ${person} ×${items.length}`)
+      for (const a of items) {
+        const days = Math.abs(a._days)
+        const dl = fmtDateShort(a.deadline)
+        lines.push(`  · ${a.task}  ${dl} ·逾 ${days}d`)
+      }
+      lines.push('')
     }
-    lines.push('')
   }
 
   if (urgent.length > 0) {
-    lines.push(`⏰ ${urgent.length} 項 3 天內到期`)
-    for (const a of urgent) {
-      const days = a._days
-      const when = days === 0 ? '今天' : days === 1 ? '明天' : `${days} 天後`
-      const person = a.person || '未指派'
-      const dl = a.deadline || '—'
-      lines.push(`• [${person}] ${a.task}（${when}・${dl}）`)
+    lines.push(`⏰ 3 天內到期 ${urgent.length} 項`)
+    lines.push('────────────')
+    for (const [person, items] of groupByPerson(urgent)) {
+      lines.push(`👤 ${person} ×${items.length}`)
+      for (const a of items) {
+        const days = a._days
+        const dl = fmtDateShort(a.deadline)
+        const when = days === 0 ? '今天' : days === 1 ? '明天' : (dl || `${days} 天後`)
+        lines.push(`  · ${a.task} — ${when}`)
+      }
+      lines.push('')
     }
-    lines.push('')
   }
 
-  lines.push('別忘了去系統勾完成 ✅')
-  return lines.join('\n')
+  lines.push('→ 去系統勾完成')
+  return lines.join('\n').trim()
 }
 
 async function pushToLine(token, groupId, text) {
@@ -139,8 +175,7 @@ export default async function handler(req, res) {
       return res.json({ ok: true, sent: false, reason: 'no pending items' })
     }
 
-    const todayStr = new Date(todayTpe.getTime()).toISOString().slice(0, 10)
-    const message = formatMessage(overdue, urgent, todayStr)
+    const message = formatMessage(overdue, urgent, todayTpe)
 
     if (req.query.dry === '1') {
       return res.json({ ok: true, dry: true, message, counts: { overdue: overdue.length, urgent: urgent.length } })
