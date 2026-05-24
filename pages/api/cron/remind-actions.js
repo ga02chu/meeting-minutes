@@ -51,6 +51,40 @@ function groupByPerson(items) {
   )
 }
 
+function mergeCoOwners(items, allForPersonCount) {
+  const personCount = new Map()
+  for (const a of allForPersonCount) {
+    const p = a.person || '未指派'
+    personCount.set(p, (personCount.get(p) || 0) + 1)
+  }
+  const taskKey = (a) => `${String(a.task || '').trim()}|${a.deadline || ''}`
+  const groups = new Map()
+  for (const a of items) {
+    const k = taskKey(a)
+    if (!groups.has(k)) groups.set(k, { persons: [], sample: a })
+    groups.get(k).persons.push(a.person || '未指派')
+  }
+  const out = []
+  for (const g of groups.values()) {
+    const uniq = Array.from(new Set(g.persons))
+    if (uniq.length === 1) {
+      out.push({ ...g.sample, person: uniq[0] })
+    } else {
+      uniq.sort(
+        (x, y) =>
+          (personCount.get(y) || 0) - (personCount.get(x) || 0) ||
+          x.localeCompare(y),
+      )
+      out.push({
+        ...g.sample,
+        person: uniq[0],
+        _coOwners: uniq.slice(1),
+      })
+    }
+  }
+  return out
+}
+
 function formatMessage(overdue, urgent, todayTpe) {
   const lines = [`🔔 頭目會議行動提醒  ${fmtTodayLabel(todayTpe)}`, '']
 
@@ -62,7 +96,8 @@ function formatMessage(overdue, urgent, todayTpe) {
       for (const a of items) {
         const days = Math.abs(a._days)
         const dl = fmtDateShort(a.deadline)
-        lines.push(`  · 已逾 ${days} 天  ${a.task}${dl ? `  (${dl})` : ''}`)
+        const co = a._coOwners?.length ? `（+${a._coOwners.join('、')}）` : ''
+        lines.push(`  · 已逾 ${days} 天  ${a.task}${co}${dl ? `  (${dl})` : ''}`)
       }
       lines.push('')
     }
@@ -77,7 +112,8 @@ function formatMessage(overdue, urgent, todayTpe) {
         const days = a._days
         const dl = fmtDateShort(a.deadline)
         const when = days === 0 ? '今天到期' : days === 1 ? '明天到期' : `${days} 天後`
-        lines.push(`  · ${when}  ${a.task}${dl ? `  (${dl})` : ''}`)
+        const co = a._coOwners?.length ? `（+${a._coOwners.join('、')}）` : ''
+        lines.push(`  · ${when}  ${a.task}${co}${dl ? `  (${dl})` : ''}`)
       }
       lines.push('')
     }
@@ -148,8 +184,11 @@ export default async function handler(req, res) {
       }
     }
 
-    overdue.sort((a, b) => a._days - b._days)
-    urgent.sort((a, b) => a._days - b._days)
+    const allRaw = [...overdue, ...urgent]
+    const overdueMerged = mergeCoOwners(overdue, allRaw)
+    const urgentMerged = mergeCoOwners(urgent, allRaw)
+    overdueMerged.sort((a, b) => a._days - b._days)
+    urgentMerged.sort((a, b) => a._days - b._days)
 
     if (req.query.debug === '1') {
       const all = []
@@ -180,14 +219,20 @@ export default async function handler(req, res) {
       return res.json({ ok: true, sent: false, reason: 'no pending items' })
     }
 
-    const message = formatMessage(overdue, urgent, todayTpe)
+    const message = formatMessage(overdueMerged, urgentMerged, todayTpe)
+    const counts = {
+      overdue_people: overdue.length,
+      overdue_tasks: overdueMerged.length,
+      urgent_people: urgent.length,
+      urgent_tasks: urgentMerged.length,
+    }
 
     if (req.query.dry === '1') {
-      return res.json({ ok: true, dry: true, message, counts: { overdue: overdue.length, urgent: urgent.length } })
+      return res.json({ ok: true, dry: true, message, counts })
     }
 
     await pushToLine(LINE_TOKEN, GROUP_ID, message)
-    return res.json({ ok: true, sent: true, counts: { overdue: overdue.length, urgent: urgent.length } })
+    return res.json({ ok: true, sent: true, counts })
   } catch (e) {
     console.error('remind-actions error:', e)
     return res.status(500).json({ error: e?.message || String(e) })
