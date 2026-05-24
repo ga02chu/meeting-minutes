@@ -62,7 +62,7 @@ function formatMessage(overdue, urgent, todayTpe) {
       for (const a of items) {
         const days = Math.abs(a._days)
         const dl = fmtDateShort(a.deadline)
-        lines.push(`  · ${a.task}  ${dl} ·逾 ${days}d`)
+        lines.push(`  · 已逾 ${days} 天  ${a.task}${dl ? `  (${dl})` : ''}`)
       }
       lines.push('')
     }
@@ -76,8 +76,8 @@ function formatMessage(overdue, urgent, todayTpe) {
       for (const a of items) {
         const days = a._days
         const dl = fmtDateShort(a.deadline)
-        const when = days === 0 ? '今天' : days === 1 ? '明天' : (dl || `${days} 天後`)
-        lines.push(`  · ${a.task} — ${when}`)
+        const when = days === 0 ? '今天到期' : days === 1 ? '明天到期' : `${days} 天後`
+        lines.push(`  · ${when}  ${a.task}${dl ? `  (${dl})` : ''}`)
       }
       lines.push('')
     }
