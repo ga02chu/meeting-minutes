@@ -58,7 +58,7 @@ function formatMessage(overdue, urgent, todayTpe) {
     lines.push(`⚠️ 已逾期 ${overdue.length} 項`)
     lines.push('────────────')
     for (const [person, items] of groupByPerson(overdue)) {
-      lines.push(`👤 ${person} ×${items.length}`)
+      lines.push(`✨ ${person} ×${items.length}`)
       for (const a of items) {
         const days = Math.abs(a._days)
         const dl = fmtDateShort(a.deadline)
@@ -72,7 +72,7 @@ function formatMessage(overdue, urgent, todayTpe) {
     lines.push(`⏰ 3 天內到期 ${urgent.length} 項`)
     lines.push('────────────')
     for (const [person, items] of groupByPerson(urgent)) {
-      lines.push(`👤 ${person} ×${items.length}`)
+      lines.push(`✨ ${person} ×${items.length}`)
       for (const a of items) {
         const days = a._days
         const dl = fmtDateShort(a.deadline)
