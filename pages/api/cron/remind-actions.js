@@ -163,7 +163,7 @@ export default async function handler(req, res) {
   if (!LINE_TOKEN || !GROUP_ID) return res.status(500).json({ error: 'LINE env missing' })
 
   try {
-    const sb = createClient(SUPA_URL, SUPA_KEY)
+    const sb = createClient(SUPA_URL, SUPA_KEY, { db: { schema: "meeting_minutes" } })
     const { data: rows, error } = await sb.from('meetings').select('data')
     if (error) throw error
 

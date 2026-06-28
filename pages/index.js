@@ -26,7 +26,7 @@ const store = {
   _sb: null,
   sb() {
     if (!this._sb && SUPA_URL && SUPA_KEY) {
-      this._sb = createClient(SUPA_URL, SUPA_KEY)
+      this._sb = createClient(SUPA_URL, SUPA_KEY, { db: { schema: "meeting_minutes" } })
       console.log('Supabase client created:', SUPA_URL.slice(0,30))
     }
     return this._sb

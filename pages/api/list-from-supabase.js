@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   if (!SUPA_URL || !SUPA_KEY) return res.status(500).json({ error: 'Supabase env missing' })
 
   try {
-    const sb = createClient(SUPA_URL, SUPA_KEY)
+    const sb = createClient(SUPA_URL, SUPA_KEY, { db: { schema: "meeting_minutes" } })
     const { data, error } = await sb
       .from('meetings')
       .select('data')
