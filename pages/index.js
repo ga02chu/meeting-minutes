@@ -507,7 +507,7 @@ function HistoryPage({ onOpen, role }) {
   const [customMonth, setCustomMonth] = useState('')
   const [search, setSearch] = useState('')
   const [dragId, setDragId] = useState(null)
-  const [sortOrder, setSortOrder] = useState(null)
+  const [sortOrder, setSortOrder] = useState('desc')
   const [tagFilter, setTagFilter] = useState(null)
   const [bulkSync, setBulkSync] = useState(null) // null | { current, total, success, error }
 
