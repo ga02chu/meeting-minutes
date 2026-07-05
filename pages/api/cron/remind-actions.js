@@ -231,10 +231,8 @@ export default async function handler(req, res) {
       return res.json({ ok: true, dry: true, message, counts })
     }
 
-    // ?to=<userId/groupId> 可覆寫推播對象（測試/預覽用，走既有認證保護）
-    const target = req.query.to || GROUP_ID
-    await pushToLine(LINE_TOKEN, target, message)
-    return res.json({ ok: true, sent: true, to: target, counts })
+    await pushToLine(LINE_TOKEN, GROUP_ID, message)
+    return res.json({ ok: true, sent: true, counts })
   } catch (e) {
     console.error('remind-actions error:', e)
     return res.status(500).json({ error: e?.message || String(e) })
