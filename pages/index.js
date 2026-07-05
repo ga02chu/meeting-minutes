@@ -60,6 +60,15 @@ const store = {
     localStorage.setItem('mtg_v3', JSON.stringify(store.get().filter(m => m.id !== id)))
     const sb = store.sb()
     if (sb) { try { await sb.from('meetings').delete().eq('id', id) } catch(e) { console.warn('Supabase del:', e) } }
+    // 同步刪 ga 秘書源頭，否則下次 syncFromCloud 會被灌回來（fire-and-forget）
+    try {
+      const r = await fetch('/api/delete-from-ga-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ external_id: String(id) }),
+      })
+      if (!r.ok) r.text().then(t => console.warn('ga assistant delete failed:', r.status, t))
+    } catch(e) { console.warn('ga assistant delete error:', e) }
   },
   toggleAction: async (mid, aid) => {
     const list = store.get(); const m = list.find(x => x.id === mid)
