@@ -163,9 +163,13 @@ export default async function handler(req, res) {
   if (!LINE_TOKEN || !GROUP_ID) return res.status(500).json({ error: 'LINE env missing' })
 
   try {
-    const sb = createClient(SUPA_URL, SUPA_KEY, { db: { schema: "meeting_minutes" } })
-    const { data: rows, error } = await sb.from('meetings').select('data')
+    // 2026-10-02 起代辦搬到「頭目營運」(toumu-ops) 的 public.hq_todos，這裡只負責每天推 LINE。
+    // 轉成原本的形狀（一場會議、一人一筆），下面的分組、合併、訊息格式都不用動。
+    const sb = createClient(SUPA_URL, SUPA_KEY)
+    const { data: todos, error } = await sb.from('hq_todos').select('title, owner, due').eq('done', false).not('due', 'is', null).limit(5000)
     if (error) throw error
+    const ownersOf = (o) => o === '三人' ? ['韋豪', '郁潔', '翰剛'] : String(o || '未指派').split(/[、,，]/).map(x => x.trim()).filter(Boolean)
+    const rows = [{ data: { date: '', actions: (todos || []).flatMap(t => ownersOf(t.owner).map(p => ({ person: p, task: t.title, deadline: t.due, done: false }))) } }]
 
     const nowUtc = new Date()
     const todayTpe = new Date(Math.floor((nowUtc.getTime() + TPE_OFFSET_MS) / 86400000) * 86400000)
